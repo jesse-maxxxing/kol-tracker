@@ -1,1 +1,822 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KOL/KOC Pipeline Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<style>
+/* ─── RESET & BASE ─── */
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#f1f5f9;color:#1e293b;font-family:'DM Mono','Courier New',monospace;padding:28px 20px;min-height:100vh}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:#e2e8f0}
+::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:2px}
 
+/* ─── HEADER ─── */
+.header{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:24px}
+.header-left .sub{font-size:11px;color:#94a3b8;letter-spacing:3px;margin-bottom:5px;font-family:'Syne',sans-serif}
+.header-left h1{font-size:26px;font-family:'Syne',sans-serif;font-weight:800;color:#0f172a}
+.header-left .desc{font-size:11px;color:#94a3b8;margin-top:3px}
+.summary-cards{display:flex;gap:10px;flex-wrap:wrap}
+.sc{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:9px 14px;text-align:center;min-width:70px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.sc .sv{font-size:20px;font-weight:700;font-family:'Syne',sans-serif}
+.sc .sl{font-size:9px;color:#94a3b8;margin-top:1px}
+
+/* ─── SYNC STATUS ─── */
+.sync-bar{display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:8px 14px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;flex-wrap:wrap;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.sync-dot{width:8px;height:8px;border-radius:50%;background:#cbd5e1;flex-shrink:0}
+.sync-dot.ok{background:#22c55e;box-shadow:0 0 6px #22c55e60}
+.sync-dot.err{background:#ef4444}
+.sync-dot.loading{background:#f59e0b;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+.sync-txt{font-size:11px;color:#64748b}
+.sync-txt span{color:#334155}
+.sync-cfg{font-size:10px;color:#cbd5e1;margin-left:auto;cursor:pointer;text-decoration:underline}
+.sync-cfg:hover{color:#94a3b8}
+
+/* ─── TOOLBAR ─── */
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+button{cursor:pointer;font-family:'DM Mono',monospace;transition:all 0.12s}
+.btn{background:#fff;color:#64748b;border:1px solid #e2e8f0;border-radius:7px;padding:6px 13px;font-size:11px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.btn:hover{color:#334155;border-color:#cbd5e1;background:#f8fafc}
+.btn.primary{background:#2563eb;color:#fff;border-color:#2563eb;box-shadow:0 1px 3px rgba(37,99,235,.3)}
+.btn.primary:hover{background:#1d4ed8}
+.btn.sm{padding:4px 9px;font-size:10px;border-radius:5px}
+.btn.danger{background:#fff;color:#dc2626;border-color:#fecaca}
+.btn.danger:hover{background:#fef2f2;border-color:#fca5a5}
+.search-box{background:#fff;border:1px solid #e2e8f0;border-radius:7px;padding:6px 11px;font-size:11px;color:#1e293b;font-family:'DM Mono',monospace;width:200px;outline:none;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.search-box:focus{border-color:#93c5fd}
+.search-box::placeholder{color:#cbd5e1}
+
+/* ─── FILTERS ─── */
+.filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.fbtn{background:#fff;color:#94a3b8;border:1px solid #e2e8f0;border-radius:20px;padding:3px 11px;font-size:10px;font-weight:700;letter-spacing:.5px;cursor:pointer;font-family:'DM Mono',monospace;transition:all .12s}
+.fbtn:hover{opacity:.85}
+.fbtn.active{border-width:1.5px}
+
+/* ─── TABLE ─── */
+.table-wrap{overflow-x:auto;border-radius:11px;border:1px solid #e2e8f0;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+table{width:100%;border-collapse:collapse;min-width:1200px}
+thead tr{background:#f8fafc;border-bottom:1px solid #e2e8f0}
+th{padding:8px 10px;text-align:left;font-size:9px;color:#94a3b8;letter-spacing:1px;font-weight:600;white-space:nowrap}
+.th-sort{cursor:pointer;user-select:none;color:#94a3b8}
+.th-sort:hover{color:#64748b}
+.sort-ico{font-size:9px;margin-left:2px;opacity:.6}
+td{padding:8px 10px;vertical-align:middle}
+.krow{cursor:pointer;border-bottom:1px solid #f1f5f9;transition:background .1s}
+.krow:nth-child(odd){background:#fff}
+.krow:nth-child(even){background:#fafafa}
+.krow:hover{background:#f0f9ff!important}
+.krow.sel{background:#eff6ff!important}
+.kname{font-weight:500;color:#0f172a;font-size:12px}
+.khandle{font-size:10px;color:#94a3b8}
+.ker{font-size:11px;font-weight:600}
+.kfee{font-size:10px;color:#64748b;white-space:nowrap}
+.knum{color:#cbd5e1;font-size:10px}
+.stage-cell{width:24px;height:24px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;border:1.5px solid}
+.tier-badge{border-radius:5px;padding:2px 7px;font-size:10px;font-weight:800;letter-spacing:1px;border:1px solid}
+.air-badge{border-radius:5px;padding:2px 8px;font-size:10px;font-weight:600;white-space:nowrap;border:1px solid}
+.brand-badge{border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700;border:1px solid;letter-spacing:.5px}
+.sku-badge{font-size:10px;font-weight:600}
+.action-cell{display:flex;gap:4px}
+.empty-row td{text-align:center;padding:28px;color:#cbd5e1;font-size:11px}
+
+/* ─── DETAIL PANEL ─── */
+#det-panel{display:none;margin-top:14px;border-radius:13px;padding:20px;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.det-hdr{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.det-name-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:3px}
+.det-name{color:#0f172a;font-size:16px;font-weight:700;font-family:'Syne',sans-serif}
+.det-sub{font-size:10px;color:#94a3b8}
+.det-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:9px;margin-bottom:16px}
+.dc{background:#f8fafc;border-radius:7px;padding:10px 12px;border:1px solid #f1f5f9}
+.dc .dl{font-size:9px;color:#94a3b8;letter-spacing:1px;margin-bottom:3px}
+.dc .dv{font-size:11px;color:#334155}
+.dc .dv.hl{color:#2563eb;font-weight:600}
+.slbl{font-size:9px;color:#94a3b8;letter-spacing:2px;margin-bottom:8px}
+.pipeline-row{display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+.pstep{border-radius:7px;padding:6px 10px;text-align:center;border:1.5px solid}
+.pnum{font-size:8px;color:#94a3b8;margin-bottom:1px}
+.plbl{font-size:9px;color:#64748b;margin-bottom:2px}
+.pico{font-size:13px}
+.parr{color:#e2e8f0;font-size:11px}
+.stats-row{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:13px}
+.stcard{background:#f8fafc;border-radius:7px;padding:8px 14px;border:1px solid}
+.stcard .sl{font-size:9px;color:#94a3b8;margin-bottom:2px}
+.stcard .sv{font-size:14px;font-weight:700}
+.notes-box{background:#f8fafc;border:1px solid #f1f5f9;border-radius:7px;padding:10px 12px}
+.notes-box .nl{font-size:9px;color:#94a3b8;letter-spacing:1px;margin-bottom:4px}
+.notes-box .nv{font-size:11px;color:#64748b;line-height:1.7}
+
+/* ─── MODAL ─── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.4);z-index:1000;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
+.overlay.open{display:flex}
+.modal{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:24px;width:100%;max-width:640px;margin:auto;box-shadow:0 8px 32px rgba(0,0,0,.12)}
+.modal h2{font-family:'Syne',sans-serif;font-size:16px;color:#0f172a;margin-bottom:16px}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.fg{display:flex;flex-direction:column;gap:4px}
+.fg label{font-size:9px;color:#94a3b8;letter-spacing:1px}
+.fg input,.fg select,.fg textarea{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:7px 10px;font-size:11px;color:#1e293b;font-family:'DM Mono',monospace;outline:none;transition:border .12s;width:100%}
+.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:#93c5fd;background:#fff}
+.fg textarea{resize:vertical;min-height:60px}
+.fg select option{background:#fff}
+.sgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:12px}
+.sg{display:flex;flex-direction:column;gap:3px}
+.sg label{font-size:8px;color:#94a3b8;letter-spacing:.5px}
+.sg select{background:#f8fafc;border:1px solid #e2e8f0;border-radius:5px;padding:5px 7px;font-size:10px;color:#1e293b;font-family:'DM Mono',monospace;outline:none}
+.sdiv{font-size:9px;color:#cbd5e1;letter-spacing:2px;margin:12px 0 8px;border-bottom:1px solid #f1f5f9;padding-bottom:5px}
+.mfooter{display:flex;justify-content:flex-end;gap:7px;margin-top:10px}
+.full{grid-column:1/-1}
+.sku-disabled{opacity:.4;cursor:not-allowed}
+
+/* ─── CONFIRM ─── */
+.conf-box{background:#fff;border:1px solid #fecaca;border-radius:12px;padding:22px 26px;max-width:320px;text-align:center;margin:auto;box-shadow:0 8px 24px rgba(0,0,0,.1)}
+.conf-box p{font-size:12px;color:#334155;margin-bottom:14px;line-height:1.6}
+.conf-name{color:#dc2626;font-weight:700}
+.conf-actions{display:flex;gap:7px;justify-content:center}
+
+/* ─── SETUP MODAL ─── */
+.setup-box{background:#fff;border:1px solid #bfdbfe;border-radius:12px;padding:24px;max-width:500px;margin:auto;box-shadow:0 8px 24px rgba(0,0,0,.1)}
+.setup-box h2{font-family:'Syne',sans-serif;font-size:15px;color:#0f172a;margin-bottom:6px}
+.setup-box p{font-size:11px;color:#64748b;margin-bottom:16px;line-height:1.6}
+.setup-field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.setup-field label{font-size:9px;color:#94a3b8;letter-spacing:1px}
+.setup-field input{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px 11px;font-size:11px;color:#1e293b;font-family:'DM Mono',monospace;outline:none;width:100%}
+.setup-field input:focus{border-color:#93c5fd;background:#fff}
+.setup-hint{font-size:10px;color:#cbd5e1;margin-top:4px;line-height:1.5}
+
+/* ─── TIER LEGEND ─── */
+.tier-legend{margin-top:28px}
+.tier-legend .lbl{font-size:9px;color:#94a3b8;letter-spacing:2px;margin-bottom:12px}
+.tier-cards{display:flex;gap:7px;flex-wrap:wrap}
+.tier-card{border-radius:9px;padding:10px 13px;min-width:120px;border:1px solid}
+.tier-card .tk{font-size:12px;font-weight:800;font-family:'Syne',sans-serif;margin-bottom:2px}
+.tier-card .td2{font-size:9px;opacity:.8;margin-bottom:4px}
+.tier-card .ti{font-size:9px;color:#64748b}
+.legend{margin-top:18px;display:flex;gap:13px;flex-wrap:wrap;align-items:center}
+.legend .lbl{font-size:9px;color:#cbd5e1;letter-spacing:1px}
+.legend-item{display:flex;align-items:center;gap:4px;font-size:10px;color:#94a3b8}
+.save-indic{font-size:9px;color:#cbd5e1;margin-left:auto}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <div class="sub">TIKTOK SHOP · MEGA CAMPAIGN · 2025</div>
+    <h1>KOL/KOC Pipeline Tracker</h1>
+    <div class="desc">Research → Proposal → Outreach → Negotiation → Booking → Pre-Shoot → Air Video</div>
+  </div>
+  <div class="summary-cards" id="summary-cards"></div>
+</div>
+
+<!-- SYNC BAR -->
+<div class="sync-bar">
+  <div class="sync-dot loading" id="sync-dot"></div>
+  <div class="sync-txt" id="sync-txt">Đang kết nối Google Sheets...</div>
+  <span class="sync-cfg" onclick="openSetup()">⚙ Cấu hình Sheets</span>
+</div>
+
+<!-- TOOLBAR -->
+<div class="toolbar">
+  <button class="btn primary" onclick="openModal()">+ Add KOL/KOC</button>
+  <button class="btn" onclick="syncFromSheet()">↻ Sync</button>
+  <button class="btn" onclick="exportCSV()">↓ Export CSV</button>
+  <input class="search-box" type="text" placeholder="Tìm tên, handle, brand, sku..." id="search" oninput="render()">
+  <span class="save-indic" id="save-indic"></span>
+</div>
+
+<!-- FILTERS -->
+<div class="filters" id="brand-filters"></div>
+<div class="filters" id="tier-filters"></div>
+<div class="filters" id="status-filters"></div>
+
+<!-- TABLE -->
+<div class="table-wrap">
+<table>
+<thead><tr>
+  <th>#</th>
+  <th>KOL / KOC</th>
+  <th>Brand</th>
+  <th>SKU</th>
+  <th class="th-sort" onclick="setSort('tier')">Tier<span class="sort-ico" id="si-tier">↕</span></th>
+  <th>Niche</th>
+  <th>Followers</th>
+  <th class="th-sort" onclick="setSort('er')">ER<span class="sort-ico" id="si-er">↕</span></th>
+  <th class="th-sort" onclick="setSort('fee')">Fee<span class="sort-ico" id="si-fee">↕</span></th>
+  <th>01<br><span style="font-size:8px;color:#1e293b">Research</span></th>
+  <th>02<br><span style="font-size:8px;color:#1e293b">Proposal</span></th>
+  <th>03<br><span style="font-size:8px;color:#1e293b">Outreach</span></th>
+  <th>04<br><span style="font-size:8px;color:#1e293b">Negot.</span></th>
+  <th>05<br><span style="font-size:8px;color:#1e293b">Booking</span></th>
+  <th>06<br><span style="font-size:8px;color:#1e293b">Pre-Shoot</span></th>
+  <th>07<br><span style="font-size:8px;color:#1e293b">Air</span></th>
+  <th>Air Status</th>
+  <th class="th-sort" onclick="setSort('airDate')">Air Date<span class="sort-ico" id="si-airDate">↕</span></th>
+  <th>Actions</th>
+</tr></thead>
+<tbody id="tbody"></tbody>
+</table>
+</div>
+
+<!-- DETAIL PANEL -->
+<div id="det-panel"></div>
+
+<!-- TIER LEGEND -->
+<div class="tier-legend">
+  <div class="lbl">TIER DEFINITION — BOOKING ENTRY FEE (VND)</div>
+  <div class="tier-cards" id="tier-cards"></div>
+</div>
+<div class="legend">
+  <div class="lbl">QA STATUS:</div>
+  <div class="legend-item"><span style="color:#16a34a;font-size:12px">✓</span> Pass</div>
+  <div class="legend-item"><span style="color:#d97706;font-size:12px">◐</span> Pending</div>
+  <div class="legend-item"><span style="color:#ea580c;font-size:12px">⚑</span> Flagged</div>
+  <div class="legend-item"><span style="color:#dc2626;font-size:12px">✕</span> Fail</div>
+  <div class="legend-item"><span style="color:#475569;font-size:12px">–</span> N/A</div>
+</div>
+
+<!-- ADD/EDIT MODAL -->
+<div class="overlay" id="overlay">
+<div class="modal">
+  <h2 id="modal-title">Add KOL / KOC</h2>
+  <div class="sdiv">THÔNG TIN CƠ BẢN</div>
+  <div class="mgrid">
+    <div class="fg"><label>TÊN KOL/KOC *</label><input type="text" id="f-name" placeholder="Linh Barbie"></div>
+    <div class="fg"><label>TIKTOK HANDLE *</label><input type="text" id="f-handle" placeholder="@handle"></div>
+    <div class="fg">
+      <label>BRAND * (chọn trước)</label>
+      <select id="f-brand" onchange="onBrandChange()">
+        <option value="">— Chọn Brand —</option>
+        <option value="Mine">Mine</option>
+        <option value="Blissberry">Blissberry</option>
+        <option value="CM24">CM24</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label>SKU *</label>
+      <select id="f-sku" disabled class="sku-disabled">
+        <option value="">— Chọn Brand trước —</option>
+      </select>
+    </div>
+    <div class="fg"><label>TIER *</label>
+      <select id="f-tier">
+        <option value="KL1">KL1 — Nano KOC (&lt;500K)</option>
+        <option value="KL2" selected>KL2 — Micro KOC (500K–2M)</option>
+        <option value="KL3">KL3 — Rising KOL (2M–5M)</option>
+        <option value="KL4">KL4 — Mid KOL (5M–15M)</option>
+        <option value="KL5">KL5 — Macro KOL (15M–40M)</option>
+        <option value="KL6">KL6 — Top KOL (40M–100M)</option>
+        <option value="KL7">KL7 — Mega KOL (&gt;100M)</option>
+      </select>
+    </div>
+    <div class="fg"><label>NICHE / CATEGORY</label><input type="text" id="f-niche" placeholder="Beauty & Skincare"></div>
+    <div class="fg"><label>FOLLOWERS</label><input type="text" id="f-followers" placeholder="38.5K"></div>
+    <div class="fg"><label>ENGAGEMENT RATE</label><input type="text" id="f-er" placeholder="6.2%"></div>
+    <div class="fg"><label>FEE (VND)</label><input type="text" id="f-fee" placeholder="1,800,000đ"></div>
+    <div class="fg"><label>AIR WINDOW</label><input type="text" id="f-airwindow" placeholder="22–25/04"></div>
+    <div class="fg"><label>ACTUAL AIR DATE</label><input type="text" id="f-airdate" placeholder="23/04"></div>
+    <div class="fg"><label>AIR STATUS *</label>
+      <select id="f-airstatus">
+        <option>Pending air</option>
+        <option>In negotiation</option>
+        <option>Confirmed – scheduled</option>
+        <option>Aired on time</option>
+        <option>Aired late (+3 ngày)</option>
+        <option>No-show</option>
+        <option>Proposal rejected</option>
+      </select>
+    </div>
+    <div class="fg"><label>PAYMENT STATUS</label><input type="text" id="f-payment" placeholder="30% paid, 70% pending"></div>
+  </div>
+  <div class="sdiv">QA STAGE STATUS</div>
+  <div class="sgrid">
+    <div class="sg"><label>01 RESEARCH</label><select id="s-research"><option value="pass">✓ Pass</option><option value="pending">◐ Pending</option><option value="flag">⚑ Flag</option><option value="fail">✕ Fail</option><option value="na">– N/A</option></select></div>
+    <div class="sg"><label>02 PROPOSAL</label><select id="s-proposal"><option value="pass">✓ Pass</option><option value="pending">◐ Pending</option><option value="flag">⚑ Flag</option><option value="fail">✕ Fail</option><option value="na">– N/A</option></select></div>
+    <div class="sg"><label>03 OUTREACH</label><select id="s-outreach"><option value="pass">✓ Pass</option><option value="pending">◐ Pending</option><option value="flag">⚑ Flag</option><option value="fail">✕ Fail</option><option value="na">– N/A</option></select></div>
+    <div class="sg"><label>04 NEGOTIATION</label><select id="s-negotiation"><option value="pass">✓ Pass</option><option value="pending">◐ Pending</option><option value="flag">⚑ Flag</option><option value="fail">✕ Fail</option><option value="na">– N/A</option></select></div>
+    <div class="sg"><label>05 BOOKING</label><select id="s-booking"><option value="pass">✓ Pass</option><option value="pending">◐ Pending</option><option value="flag">⚑ Flag</option><option value="fail">✕ Fail</option><option value="na">– N/A</option></select></div>
+    <div class="sg"><label>06 PRE-SHOOT</label><select id="s-pre_shoot"><option value="pass">✓ Pass</option><option value="pending">◐ Pending</option><option value="flag">⚑ Flag</option><option value="fail">✕ Fail</option><option value="na">– N/A</option></select></div>
+    <div class="sg"><label>07 AIR VIDEO</label><select id="s-air"><option value="pass">✓ Pass</option><option value="pending">◐ Pending</option><option value="flag">⚑ Flag</option><option value="fail">✕ Fail</option><option value="na">– N/A</option></select></div>
+  </div>
+  <div class="sdiv">POST-AIR STATS (tuỳ chọn)</div>
+  <div class="mgrid">
+    <div class="fg"><label>VIEWS</label><input type="text" id="vs-views" placeholder="124K"></div>
+    <div class="fg"><label>LIKES</label><input type="text" id="vs-likes" placeholder="8.2K"></div>
+    <div class="fg"><label>COMMENTS</label><input type="text" id="vs-comments" placeholder="312"></div>
+    <div class="fg"><label>EST. GMV</label><input type="text" id="vs-gmv" placeholder="~18M"></div>
+  </div>
+  <div class="sdiv">QA NOTES & ACTIONS</div>
+  <div class="fg full" style="margin-bottom:6px"><textarea id="f-notes" placeholder="Ghi chú, action items, flags cần theo dõi..."></textarea></div>
+  <div class="mfooter">
+    <button class="btn" onclick="closeModal()">Huỷ</button>
+    <button class="btn primary" onclick="saveKol()">Lưu & Sync</button>
+  </div>
+</div>
+</div>
+
+<!-- DELETE CONFIRM -->
+<div class="overlay" id="conf-overlay">
+<div class="conf-box">
+  <p>Xác nhận xoá <span class="conf-name" id="conf-name"></span>?<br><span style="font-size:10px;color:#475569">Hành động này không thể hoàn tác.</span></p>
+  <div class="conf-actions">
+    <button class="btn" onclick="closeConfirm()">Huỷ</button>
+    <button class="btn danger" onclick="confirmDelete()">Xoá</button>
+  </div>
+</div>
+</div>
+
+<!-- SETUP MODAL -->
+<div class="overlay" id="setup-overlay">
+<div class="setup-box">
+  <h2>⚙ Cấu hình Google Sheets</h2>
+  <p>Paste URL của Google Apps Script Web App vào đây để bật sync. Xem hướng dẫn trong file <code style="color:#2563eb">HUONG_DAN_DEPLOY.md</code>.</p>
+  <div class="setup-field">
+    <label>APPS SCRIPT WEB APP URL</label>
+    <input type="text" id="setup-url" placeholder="https://script.google.com/macros/s/XXXX/exec">
+    <div class="setup-hint">Lấy URL này sau khi Deploy Apps Script (bước 3 trong hướng dẫn).</div>
+  </div>
+  <div class="setup-field">
+    <label>CAMPAIGN LABEL (tuỳ chọn)</label>
+    <input type="text" id="setup-label" placeholder="TIKTOK SHOP · Q2/2025">
+  </div>
+  <div class="mfooter">
+    <button class="btn" onclick="closeSetup()">Huỷ</button>
+    <button class="btn primary" onclick="saveSetup()">Lưu & Test kết nối</button>
+  </div>
+</div>
+</div>
+
+<script>
+/* ══════════════════════════════════════
+   DATA & CONFIG
+══════════════════════════════════════ */
+const BRANDS = {
+  Mine:       {color:"#f9a8d4",bg:"#3b0764",border:"#db2777",skus:["LITA30","DJ30","MN30","STLITA","STDJ","STMN"]},
+  Blissberry: {color:"#7dd3fc",bg:"#0c4a6e",border:"#0284c7",skus:["SRMX","SRMH","Serum","UV"]},
+  CM24:       {color:"#a5b4fc",bg:"#1e1b4b",border:"#4f46e5",skus:["TG2I1","TG2I1500","DCR","BCR","IC30","IW30","PERFUMBOX"]},
+};
+const TIERS = {
+  KL1:{color:"#64748b",bg:"#f1f5f9",entry:"<500K",desc:"Nano KOC",order:1},
+  KL2:{color:"#059669",bg:"#ecfdf5",entry:"500K–2M",desc:"Micro KOC",order:2},
+  KL3:{color:"#0284c7",bg:"#e0f2fe",entry:"2M–5M",desc:"Rising KOL",order:3},
+  KL4:{color:"#4f46e5",bg:"#eef2ff",entry:"5M–15M",desc:"Mid KOL",order:4},
+  KL5:{color:"#db2777",bg:"#fdf2f8",entry:"15M–40M",desc:"Macro KOL",order:5},
+  KL6:{color:"#ea580c",bg:"#fff7ed",entry:"40M–100M",desc:"Top KOL",order:6},
+  KL7:{color:"#ca8a04",bg:"#fefce8",entry:">100M",desc:"Mega KOL",order:7},
+};
+const STAGES = ["research","proposal","outreach","negotiation","booking","pre_shoot","air"];
+const SLABELS = ["Research","Proposal","Outreach","Negotiation","Booking","Pre-Shoot","Air Video"];
+const STATUS = {
+  pass:   {icon:"✓",color:"#16a34a",bg:"rgba(22,163,74,.1)"},
+  pending:{icon:"◐",color:"#d97706",bg:"rgba(217,119,6,.1)"},
+  flag:   {icon:"⚑",color:"#ea580c",bg:"rgba(234,88,12,.1)"},
+  fail:   {icon:"✕",color:"#dc2626",bg:"rgba(220,38,38,.1)"},
+  na:     {icon:"–",color:"#475569",bg:"rgba(71,85,105,.1)"},
+};
+const AIR_C = {
+  "Aired on time":         {c:"#16a34a",bg:"rgba(22,163,74,.08)"},
+  "Aired late (+3 ngày)":  {c:"#ea580c",bg:"rgba(234,88,12,.08)"},
+  "No-show":               {c:"#dc2626",bg:"rgba(220,38,38,.08)"},
+  "Pending air":           {c:"#d97706",bg:"rgba(217,119,6,.08)"},
+  "In negotiation":        {c:"#4f46e5",bg:"rgba(79,70,229,.08)"},
+  "Confirmed – scheduled": {c:"#0284c7",bg:"rgba(2,132,199,.08)"},
+  "Proposal rejected":     {c:"#475569",bg:"rgba(71,85,105,.1)"},
+};
+const DEFAULT_DATA = [
+  {id:1,name:"Linh Barbie",handle:"@linhbarbie.tt",brand:"Blissberry",sku:"Serum",tier:"KL2",niche:"Beauty & Skincare",er:"6.2%",followers:"38.5K",fee:"1,800,000đ",airWindow:"22–25/04",airDate:"23/04",airStatus:"Aired on time",stages:{research:"pass",proposal:"pass",outreach:"pass",negotiation:"pass",booking:"pass",pre_shoot:"pass",air:"pass"},notes:"Video đạt 124K views/24h. Brief compliance 100%.",paymentSplit:"30% paid, 70% released",videoStats:{views:"124K",likes:"8.2K",comments:"312",gmv:"~18M"}},
+  {id:2,name:"Trung Skincare Man",handle:"@trungskincareman",brand:"CM24",sku:"DCR",tier:"KL3",niche:"Men Grooming",er:"4.8%",followers:"92K",fee:"3,500,000đ",airWindow:"20–23/04",airDate:"26/04",airStatus:"Aired late (+3 ngày)",stages:{research:"pass",proposal:"pass",outreach:"pass",negotiation:"pass",booking:"pass",pre_shoot:"flag",air:"flag"},notes:"Air trễ 3 ngày. 70% fee hold. Moved to Watchlist.",paymentSplit:"30% paid, 70% held → released 26/04",videoStats:{views:"67K",likes:"4.1K",comments:"189",gmv:"~9M"}},
+  {id:3,name:"Hà Mọt Sách",handle:"@ha.motsach",brand:"Mine",sku:"LITA30",tier:"KL1",niche:"Lifestyle / Daily Vlog",er:"8.1%",followers:"7.2K",fee:"350,000đ",airWindow:"21–24/04",airDate:"21/04",airStatus:"Aired on time",stages:{research:"pass",proposal:"pass",outreach:"pass",negotiation:"pass",booking:"pass",pre_shoot:"pass",air:"pass"},notes:"Nano tier, ER rất cao. Uplift KL2 lần sau.",paymentSplit:"Full paid post-air",videoStats:{views:"31K",likes:"2.5K",comments:"94",gmv:"~4M"}},
+  {id:4,name:"Chef Minh Tú",handle:"@chefminhtuu",brand:"CM24",sku:"IC30",tier:"KL4",niche:"Food & Cooking",er:"3.1%",followers:"280K",fee:"12,000,000đ",airWindow:"24–27/04",airDate:"",airStatus:"Pending air",stages:{research:"pass",proposal:"pass",outreach:"pass",negotiation:"pass",booking:"pass",pre_shoot:"pending",air:"pending"},notes:"Chờ air 25/04. Monitor D-day.",paymentSplit:"30% paid, 70% pending",videoStats:null},
+  {id:5,name:"Ngọc Glamour",handle:"@ngocglamour.vn",brand:"Mine",sku:"DJ30",tier:"KL5",niche:"Fashion & Beauty",er:"2.4%",followers:"720K",fee:"28,000,000đ",airWindow:"18–21/04",airDate:"",airStatus:"No-show",stages:{research:"pass",proposal:"pass",outreach:"pass",negotiation:"flag",booking:"flag",pre_shoot:"fail",air:"fail"},notes:"No-show. 70% fee withheld. Cần escalate qua agency.",paymentSplit:"30% paid only — 70% withheld",videoStats:null},
+  {id:6,name:"Bảo Fitness VN",handle:"@baofitnessvn",brand:"Blissberry",sku:"UV",tier:"KL3",niche:"Fitness & Health",er:"5.5%",followers:"134K",fee:"4,200,000đ",airWindow:"19–22/04",airDate:"20/04",airStatus:"Aired on time",stages:{research:"pass",proposal:"pass",outreach:"pass",negotiation:"pass",booking:"pass",pre_shoot:"pass",air:"pass"},notes:"Brief 95%. Thiếu TikTok Shop link, bổ sung sau 2h.",paymentSplit:"Full paid post-air",videoStats:{views:"88K",likes:"6.7K",comments:"241",gmv:"~13M"}},
+  {id:7,name:"Khánh Review Đồ",handle:"@khanhreviewdo",brand:"Blissberry",sku:"SRMX",tier:"KL2",niche:"Product Review",er:"7.3%",followers:"44K",fee:"1,500,000đ",airWindow:"23–26/04",airDate:"",airStatus:"In negotiation",stages:{research:"pass",proposal:"pass",outreach:"pass",negotiation:"pending",booking:"na",pre_shoot:"na",air:"na"},notes:"Counter fee +500K + thêm 1 gifting unit. Chờ brand approve.",paymentSplit:"Chưa có",videoStats:null},
+  {id:8,name:"Mia Phong Cách",handle:"@miaphongcach",brand:"Mine",sku:"STLITA",tier:"KL6",niche:"Fashion / Lifestyle",er:"2.1%",followers:"1.8M",fee:"75,000,000đ",airWindow:"25–28/04",airDate:"25/04",airStatus:"Confirmed – scheduled",stages:{research:"pass",proposal:"pass",outreach:"pass",negotiation:"pass",booking:"pass",pre_shoot:"pass",air:"pending"},notes:"Priority Partner. Shoot xong, đang edit.",paymentSplit:"30% paid, 70% pending air",videoStats:null},
+  {id:9,name:"Tuấn Ẩm Thực",handle:"@tuanamthuc.official",brand:"CM24",sku:"BCR",tier:"KL1",niche:"Street Food / Local",er:"9.4%",followers:"5.8K",fee:"200,000đ",airWindow:"20–22/04",airDate:"",airStatus:"Proposal rejected",stages:{research:"pass",proposal:"fail",outreach:"na",negotiation:"na",booking:"na",pre_shoot:"na",air:"na"},notes:"Từ chối — brand safety issue tháng 3.",paymentSplit:"Không áp dụng",videoStats:null},
+  {id:10,name:"Diệu Linh GRWM",handle:"@dieulinhrwm",brand:"Mine",sku:"MN30",tier:"KL4",niche:"Beauty GRWM",er:"3.8%",followers:"390K",fee:"14,000,000đ",airWindow:"22–25/04",airDate:"22/04",airStatus:"Aired on time",stages:{research:"pass",proposal:"pass",outreach:"pass",negotiation:"pass",booking:"pass",pre_shoot:"pass",air:"pass"},notes:"Top performer. 183K views, GMV ~35M. Đề xuất Priority Partner.",paymentSplit:"Full paid post-air",videoStats:{views:"183K",likes:"14.1K",comments:"520",gmv:"~35M"}},
+];
+
+/* ══════════════════════════════════════
+   STATE
+══════════════════════════════════════ */
+let kols = JSON.parse(localStorage.getItem("kol_v3_data")||"null") || DEFAULT_DATA.map(k=>({...k}));
+let nextId = Math.max(...kols.map(k=>k.id),0)+1;
+let selId=null, fBrand="ALL", fTier="ALL", fStatus="ALL";
+let editId=null, delId=null, sortField=null, sortDir=1;
+let scriptUrl = localStorage.getItem("kol_script_url")||"";
+let campaignLabel = localStorage.getItem("kol_campaign_label")||"TIKTOK SHOP · MEGA CAMPAIGN · 2025";
+
+/* ══════════════════════════════════════
+   SHEETS SYNC
+══════════════════════════════════════ */
+function setSyncStatus(state, msg) {
+  const dot=document.getElementById("sync-dot");
+  const txt=document.getElementById("sync-txt");
+  dot.className="sync-dot "+state;
+  txt.innerHTML=msg;
+}
+
+// JSONP helper — dùng cho cả GET lẫn write operations
+function jsonp(params) {
+  return new Promise((resolve, reject) => {
+    const cbName = "cb_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+    const script = document.createElement("script");
+    const timeout = setTimeout(() => {
+      cleanup(); reject(new Error("Timeout"));
+    }, 10000);
+    function cleanup() {
+      delete window[cbName];
+      if(script.parentNode) script.parentNode.removeChild(script);
+      clearTimeout(timeout);
+    }
+    window[cbName] = (data) => { cleanup(); resolve(data); };
+    script.onerror = () => { cleanup(); reject(new Error("Script error")); };
+    const qs = Object.entries({...params, callback: cbName})
+      .map(([k,v]) => encodeURIComponent(k) + "=" + encodeURIComponent(typeof v === "object" ? JSON.stringify(v) : v))
+      .join("&");
+    script.src = scriptUrl + "?" + qs;
+    document.body.appendChild(script);
+  });
+}
+
+async function syncFromSheet() {
+  if(!scriptUrl){setSyncStatus("err","Chưa cấu hình Sheets URL — click <span style='color:#2563eb;cursor:pointer' onclick='openSetup()'>⚙ Cấu hình</span>");return;}
+  setSyncStatus("loading","Đang sync từ Google Sheets...");
+  try{
+    const data = await jsonp({action:"getAll"});
+    if(data.error) throw new Error(data.error);
+    if(data.kols && data.kols.length > 0){
+      kols = data.kols;
+      nextId = Math.max(...kols.map(k=>k.id),0)+1;
+      saveLocal(); render();
+      setSyncStatus("ok",`<span>Synced từ Sheets</span> · ${new Date().toLocaleTimeString("vi-VN")}`);
+    } else {
+      setSyncStatus("loading","Sheets trống — đang push data lên...");
+      await pushAllToSheet();
+    }
+  }catch(e){
+    setSyncStatus("err","Lỗi kết nối Sheets. Kiểm tra URL hoặc quyền deploy.");
+    console.error(e);
+  }
+}
+
+async function pushToSheet(kol, action="upsert") {
+  if(!scriptUrl) return;
+  try{
+    await jsonp({action, kol});
+    setSyncStatus("ok",`<span>Saved & synced</span> · ${new Date().toLocaleTimeString("vi-VN")}`);
+  }catch(e){
+    setSyncStatus("err","Lưu local OK — Sheets sync thất bại, thử lại sau.");
+  }
+}
+
+async function deleteFromSheet(id) {
+  if(!scriptUrl) return;
+  try{ await jsonp({action:"delete", id}); }catch(e){ console.error(e); }
+}
+
+async function pushAllToSheet() {
+  if(!scriptUrl) return;
+  try{
+    await jsonp({action:"setAll", kols});
+    setSyncStatus("ok",`<span>Full push hoàn tất</span> · ${new Date().toLocaleTimeString("vi-VN")}`);
+  }catch(e){
+    setSyncStatus("err","Push thất bại.");
+  }
+}
+
+function saveLocal(){localStorage.setItem("kol_v3_data",JSON.stringify(kols));}
+function setIndic(msg){const el=document.getElementById("save-indic");el.textContent=msg;setTimeout(()=>el.textContent="",3000);}
+
+/* ══════════════════════════════════════
+   SETUP MODAL
+══════════════════════════════════════ */
+function openSetup(){
+  document.getElementById("setup-url").value=scriptUrl;
+  document.getElementById("setup-label").value=campaignLabel;
+  document.getElementById("setup-overlay").classList.add("open");
+}
+function closeSetup(){document.getElementById("setup-overlay").classList.remove("open");}
+async function saveSetup(){
+  const url=document.getElementById("setup-url").value.trim();
+  const lbl=document.getElementById("setup-label").value.trim();
+  if(url){scriptUrl=url;localStorage.setItem("kol_script_url",url);}
+  if(lbl){campaignLabel=lbl;localStorage.setItem("kol_campaign_label",lbl);document.querySelector(".sub").textContent=lbl;}
+  closeSetup();
+  if(url)await syncFromSheet();
+}
+
+/* ══════════════════════════════════════
+   SORT & FILTER
+══════════════════════════════════════ */
+function feeN(s){return parseFloat((s||"0").replace(/[^\d.]/g,""))||0;}
+function erN(s){return parseFloat((s||"0").replace(/[^0-9.]/g,""))||0;}
+function dateN(s){if(!s)return 0;const m=s.match(/(\d+)\/(\d+)/);return m?parseInt(m[2])*100+parseInt(m[1]):0;}
+
+function getSorted(arr){
+  if(!sortField)return arr;
+  return [...arr].sort((a,b)=>{
+    const vals={tier:[TIERS[a.tier]?.order||0,TIERS[b.tier]?.order||0],er:[erN(a.er),erN(b.er)],fee:[feeN(a.fee),feeN(b.fee)],airDate:[dateN(a.airDate),dateN(b.airDate)]};
+    const[va,vb]=vals[sortField]||[0,0];
+    return(va-vb)*sortDir;
+  });
+}
+function setSort(f){
+  if(sortField===f)sortDir*=-1;else{sortField=f;sortDir=1;}
+  ["tier","er","fee","airDate"].forEach(x=>{const el=document.getElementById("si-"+x);if(el)el.textContent=x===sortField?(sortDir===1?"↑":"↓"):"↕";});
+  render();
+}
+function getFiltered(){
+  const q=document.getElementById("search").value.toLowerCase();
+  return getSorted(kols.filter(k=>{
+    if(fBrand!=="ALL"&&k.brand!==fBrand)return false;
+    if(fTier!=="ALL"&&k.tier!==fTier)return false;
+    if(fStatus==="pass"&&!Object.values(k.stages).every(s=>s==="pass"))return false;
+    if(fStatus==="flag"&&!Object.values(k.stages).some(s=>s==="flag"))return false;
+    if(fStatus==="fail"&&!Object.values(k.stages).some(s=>s==="fail"))return false;
+    if(q&&!`${k.name} ${k.handle} ${k.niche} ${k.brand} ${k.sku}`.toLowerCase().includes(q))return false;
+    return true;
+  }));
+}
+function setBrand(b){fBrand=b;render();}
+function setTier(t){fTier=t;render();}
+function setStatus(s){fStatus=s;render();}
+
+/* ══════════════════════════════════════
+   HTML HELPERS
+══════════════════════════════════════ */
+function brandBadge(brand){
+  const b=BRANDS[brand];
+  if(!b)return`<span style="font-size:10px;color:#475569">${brand||"—"}</span>`;
+  return`<span class="brand-badge" style="background:${b.bg};color:${b.color};border-color:${b.border}50">${brand}</span>`;
+}
+function skuBadge(sku,brand){
+  const b=BRANDS[brand];
+  if(!sku)return`<span style="font-size:10px;color:#334155">—</span>`;
+  return`<span class="sku-badge" style="color:${b?.color||"#94a3b8"}">${sku}</span>`;
+}
+function tierBadge(tier){
+  const t=TIERS[tier];
+  if(!t)return`<span class="tier-badge">${tier}</span>`;
+  return`<span class="tier-badge" style="background:${t.bg};color:${t.color};border-color:${t.color}50">${tier}</span>`;
+}
+function airBadge(status){
+  const c=AIR_C[status]||{c:"#94a3b8",bg:"rgba(148,163,184,.1)"};
+  return`<span class="air-badge" style="background:${c.bg};color:${c.c};border-color:${c.c}40">${status}</span>`;
+}
+function stCell(status){
+  const s=STATUS[status]||STATUS.na;
+  return`<div class="stage-cell" style="background:${s.bg};border-color:${s.color}50;color:${s.color}">${s.icon}</div>`;
+}
+
+/* ══════════════════════════════════════
+   RENDER
+══════════════════════════════════════ */
+function render(){
+  renderScards();renderBrandFilters();renderTierFilters();renderStatusFilters();renderTable();renderTierCards();
+  document.querySelector(".sub").textContent=campaignLabel;
+}
+
+function renderScards(){
+  const aired=kols.filter(k=>k.airStatus==="Aired on time").length;
+  const late=kols.filter(k=>k.airStatus.includes("late")).length;
+  const noShow=kols.filter(k=>k.airStatus==="No-show").length;
+  const pending=kols.filter(k=>["Pending air","Confirmed – scheduled","In negotiation"].includes(k.airStatus)).length;
+  document.getElementById("summary-cards").innerHTML=[
+    {l:"Total",v:kols.length,c:"#94a3b8"},
+    {l:"Aired ✓",v:aired,c:"#16a34a"},
+    {l:"Late ⚑",v:late,c:"#ea580c"},
+    {l:"No-show",v:noShow,c:"#dc2626"},
+    {l:"Pending",v:pending,c:"#d97706"},
+  ].map(c=>`<div class="sc"><div class="sv" style="color:${c.c}">${c.v}</div><div class="sl">${c.l}</div></div>`).join("");
+}
+
+function renderBrandFilters(){
+  document.getElementById("brand-filters").innerHTML=["ALL","Mine","Blissberry","CM24"].map(b=>{
+    const active=fBrand===b;const br=BRANDS[b];
+    const style=active&&br?`background:${br.bg};color:${br.color};border-color:${br.border};border-width:1.5px`
+      :active?`background:#1e293b;color:#e2e8f0;border-width:1.5px`:"";
+    return`<button class="fbtn${active?" active":""}" style="${style}" onclick="setBrand('${b}')">${b==="ALL"?"All Brands":b}</button>`;
+  }).join("");
+}
+
+function renderTierFilters(){
+  document.getElementById("tier-filters").innerHTML=["ALL",...Object.keys(TIERS)].map(t=>{
+    const active=fTier===t;const tier=TIERS[t];
+    const style=active&&tier?`background:${tier.bg};color:${tier.color};border-color:${tier.color};border-width:1.5px`
+      :active?`background:#1e293b;color:#e2e8f0;border-width:1.5px`:"";
+    return`<button class="fbtn${active?" active":""}" style="${style}" onclick="setTier('${t}')">${t==="ALL"?"All Tiers":t}</button>`;
+  }).join("");
+}
+
+function renderStatusFilters(){
+  document.getElementById("status-filters").innerHTML=[
+    {id:"ALL",l:"All Status"},{id:"pass",l:"✓ Full Pass"},{id:"flag",l:"⚑ Has Flag"},{id:"fail",l:"✕ Has Fail"},
+  ].map(f=>{
+    const active=fStatus===f.id;
+    const style=active?`background:#1e293b;color:#e2e8f0;border-width:1.5px`:"";
+    return`<button class="fbtn${active?" active":""}" style="${style}" onclick="setStatus('${f.id}')">${f.l}</button>`;
+  }).join("");
+}
+
+function renderTable(){
+  const rows=getFiltered();
+  if(!rows.length){document.getElementById("tbody").innerHTML=`<tr class="empty-row"><td colspan="20">Không có KOL nào phù hợp</td></tr>`;return;}
+  document.getElementById("tbody").innerHTML=rows.map((k,i)=>`
+    <tr class="krow${selId===k.id?" sel":""}" id="row-${k.id}">
+      <td onclick="selectKol(${k.id})"><span class="knum">${String(i+1).padStart(2,"0")}</span></td>
+      <td onclick="selectKol(${k.id})"><div class="kname">${k.name}</div><div class="khandle">${k.handle}</div></td>
+      <td onclick="selectKol(${k.id})">${brandBadge(k.brand)}</td>
+      <td onclick="selectKol(${k.id})">${skuBadge(k.sku,k.brand)}</td>
+      <td onclick="selectKol(${k.id})">${tierBadge(k.tier)}</td>
+      <td onclick="selectKol(${k.id})" style="font-size:10px;color:#64748b">${k.niche||"—"}</td>
+      <td onclick="selectKol(${k.id})" style="font-size:11px;color:#94a3b8">${k.followers||"—"}</td>
+      <td onclick="selectKol(${k.id})" class="ker" style="color:${BRANDS[k.brand]?.color||"#67e8f9"}">${k.er||"—"}</td>
+      <td onclick="selectKol(${k.id})" class="kfee">${k.fee||"—"}</td>
+      ${STAGES.map(s=>`<td onclick="selectKol(${k.id})" style="text-align:center">${stCell(k.stages[s])}</td>`).join("")}
+      <td onclick="selectKol(${k.id})">${airBadge(k.airStatus)}</td>
+      <td onclick="selectKol(${k.id})" style="font-size:10px;color:#64748b">${k.airDate||"—"}</td>
+      <td><div class="action-cell">
+        <button class="btn sm" onclick="openEdit(${k.id})">Edit</button>
+        <button class="btn sm danger" onclick="openDelete(${k.id})">Del</button>
+      </div></td>
+    </tr>`).join("");
+}
+
+function renderTierCards(){
+  document.getElementById("tier-cards").innerHTML=Object.entries(TIERS).map(([key,t])=>
+    `<div class="tier-card" style="background:${t.bg};border-color:${t.color}40">
+      <div class="tk" style="color:${t.color}">${key}</div>
+      <div class="td2" style="color:${t.color}">${t.desc}</div>
+      <div class="ti">Followers: —</div>
+      <div class="ti">Entry: ${t.entry}đ</div>
+    </div>`).join("");
+}
+
+/* ══════════════════════════════════════
+   SELECT / DETAIL
+══════════════════════════════════════ */
+function selectKol(id){
+  if(selId===id){selId=null;document.getElementById("det-panel").style.display="none";}
+  else{selId=id;renderDet(kols.find(k=>k.id===id));}
+  renderTable();
+}
+
+function renderDet(k){
+  const b=BRANDS[k.brand]||{color:"#94a3b8",bg:"#1e293b",border:"#334155"};
+  const panel=document.getElementById("det-panel");
+  panel.style.cssText=`display:block;border:1px solid ${b.border}50;box-shadow:0 0 30px ${b.border}08;`;
+
+  const infoCards=[
+    {l:"Brand",v:brandBadge(k.brand),raw:true},
+    {l:"SKU",v:skuBadge(k.sku,k.brand),raw:true},
+    {l:"Niche",v:k.niche||"—"},
+    {l:"Followers",v:k.followers||"—"},
+    {l:"Engagement Rate",v:k.er||"—",hl:true},
+    {l:"Booking Fee",v:k.fee||"—"},
+    {l:"Air Window",v:k.airWindow||"—"},
+    {l:"Actual Air Date",v:k.airDate||"—"},
+    {l:"Payment Status",v:k.paymentSplit||"—"},
+    {l:"Air Status",v:airBadge(k.airStatus),raw:true},
+  ].map(i=>`<div class="dc"><div class="dl">${i.l.toUpperCase()}</div><div class="dv${i.hl?" hl":""}">${i.v}</div></div>`).join("");
+
+  const pipeline=STAGES.map((s,i)=>{
+    const cfg=STATUS[k.stages[s]]||STATUS.na;
+    return`<div style="display:flex;align-items:center;gap:4px">
+      <div class="pstep" style="background:${cfg.bg};border-color:${cfg.color}50">
+        <div class="pnum">QA-0${i+1}</div><div class="plbl">${SLABELS[i]}</div>
+        <div class="pico" style="color:${cfg.color}">${cfg.icon}</div>
+      </div>${i<STAGES.length-1?'<div class="parr">→</div>':''}
+    </div>`;
+  }).join("");
+
+  const statsH=k.videoStats?`<div><div class="slbl">POST-AIR STATS (24H)</div><div class="stats-row">
+    ${[{l:"Views",v:k.videoStats.views,c:"#0284c7"},{l:"Likes",v:k.videoStats.likes,c:"#db2777"},{l:"Comments",v:k.videoStats.comments,c:"#4f46e5"},{l:"Est. GMV",v:k.videoStats.gmv,c:"#16a34a"}]
+    .map(s=>`<div class="stcard" style="border-color:${s.c}30"><div class="sl">${s.l}</div><div class="sv" style="color:${s.c}">${s.v}</div></div>`).join("")}
+  </div></div>`:"";
+
+  panel.innerHTML=`
+    <div class="det-hdr">
+      <div>
+        <div class="det-name-row">${tierBadge(k.tier)}<span class="det-name">${k.name}</span><span style="font-size:10px;color:#475569">${k.handle}</span></div>
+        <div class="det-sub">${TIERS[k.tier]?.desc||""} · Entry fee ${TIERS[k.tier]?.entry||""}đ</div>
+      </div>
+      <div style="display:flex;gap:5px">
+        <button class="btn sm" onclick="openEdit(${k.id})">✏ Edit</button>
+        <button class="btn sm" onclick="closeDetail()">✕ Close</button>
+      </div>
+    </div>
+    <div class="det-grid">${infoCards}</div>
+    <div><div class="slbl">QA PIPELINE</div><div class="pipeline-row">${pipeline}</div></div>
+    ${statsH}
+    <div class="notes-box"><div class="nl">QA NOTES & ACTIONS</div><div class="nv">${k.notes||"Chưa có ghi chú."}</div></div>`;
+  panel.scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+function closeDetail(){selId=null;document.getElementById("det-panel").style.display="none";renderTable();}
+
+/* ══════════════════════════════════════
+   MODAL ADD/EDIT
+══════════════════════════════════════ */
+function onBrandChange(){
+  const brand=document.getElementById("f-brand").value;
+  const skuSel=document.getElementById("f-sku");
+  if(!brand){skuSel.innerHTML=`<option value="">— Chọn Brand trước —</option>`;skuSel.disabled=true;skuSel.className="sku-disabled";return;}
+  skuSel.innerHTML=`<option value="">— Chọn SKU —</option>`+(BRANDS[brand]?.skus||[]).map(s=>`<option value="${s}">${s}</option>`).join("");
+  skuSel.disabled=false;skuSel.className="";
+}
+
+function openModal(k){
+  editId=k?k.id:null;
+  document.getElementById("modal-title").textContent=k?"Edit KOL / KOC":"Add KOL / KOC";
+  const f=(id,val="")=>{const el=document.getElementById(id);if(el)el.value=val;};
+  f("f-name",k?.name||"");f("f-handle",k?.handle||"");f("f-brand",k?.brand||"");
+  f("f-tier",k?.tier||"KL2");f("f-niche",k?.niche||"");f("f-followers",k?.followers||"");
+  f("f-er",k?.er||"");f("f-fee",k?.fee||"");f("f-airwindow",k?.airWindow||"");
+  f("f-airdate",k?.airDate||"");f("f-airstatus",k?.airStatus||"Pending air");
+  f("f-payment",k?.paymentSplit||"");f("f-notes",k?.notes||"");
+  STAGES.forEach(s=>f(`s-${s}`,k?.stages[s]||"pending"));
+  f("vs-views",k?.videoStats?.views||"");f("vs-likes",k?.videoStats?.likes||"");
+  f("vs-comments",k?.videoStats?.comments||"");f("vs-gmv",k?.videoStats?.gmv||"");
+  onBrandChange();
+  if(k?.sku)setTimeout(()=>{f("f-sku",k.sku);},60);
+  document.getElementById("overlay").classList.add("open");
+}
+function openEdit(id){openModal(kols.find(k=>k.id===id));}
+function closeModal(){document.getElementById("overlay").classList.remove("open");editId=null;}
+
+async function saveKol(){
+  const name=document.getElementById("f-name").value.trim();
+  const brand=document.getElementById("f-brand").value;
+  const sku=document.getElementById("f-sku").value;
+  if(!name){alert("Vui lòng nhập tên KOL/KOC");return;}
+  if(!brand){alert("Vui lòng chọn Brand");return;}
+  if(!sku){alert("Vui lòng chọn SKU");return;}
+  const vsV=document.getElementById("vs-views").value.trim();
+  const vsL=document.getElementById("vs-likes").value.trim();
+  const newK={
+    id:editId||nextId++,name,brand,sku,
+    handle:document.getElementById("f-handle").value.trim(),
+    tier:document.getElementById("f-tier").value,
+    niche:document.getElementById("f-niche").value.trim(),
+    followers:document.getElementById("f-followers").value.trim(),
+    er:document.getElementById("f-er").value.trim(),
+    fee:document.getElementById("f-fee").value.trim(),
+    airWindow:document.getElementById("f-airwindow").value.trim(),
+    airDate:document.getElementById("f-airdate").value.trim(),
+    airStatus:document.getElementById("f-airstatus").value,
+    paymentSplit:document.getElementById("f-payment").value.trim(),
+    notes:document.getElementById("f-notes").value.trim(),
+    stages:Object.fromEntries(STAGES.map(s=>[s,document.getElementById(`s-${s}`).value])),
+    videoStats:(vsV||vsL)?{views:vsV||"—",likes:vsL||"—",comments:document.getElementById("vs-comments").value.trim()||"—",gmv:document.getElementById("vs-gmv").value.trim()||"—"}:null,
+  };
+  if(editId){kols=kols.map(k=>k.id===editId?newK:k);if(selId===editId)renderDet(newK);}
+  else kols.push(newK);
+  saveLocal();closeModal();render();
+  await pushToSheet(newK,"upsert");
+}
+
+/* ══════════════════════════════════════
+   DELETE
+══════════════════════════════════════ */
+function openDelete(id){
+  delId=id;document.getElementById("conf-name").textContent=kols.find(k=>k.id===id)?.name||"";
+  document.getElementById("conf-overlay").classList.add("open");
+}
+function closeConfirm(){document.getElementById("conf-overlay").classList.remove("open");delId=null;}
+async function confirmDelete(){
+  const id=delId;
+  kols=kols.filter(k=>k.id!==id);
+  if(selId===id){selId=null;document.getElementById("det-panel").style.display="none";}
+  saveLocal();closeConfirm();render();
+  await deleteFromSheet(id);
+}
+
+/* ══════════════════════════════════════
+   EXPORT CSV
+══════════════════════════════════════ */
+function exportCSV(){
+  const h=["ID","Name","Handle","Brand","SKU","Tier","Niche","Followers","ER","Fee","AirWindow","AirDate","AirStatus","Payment",...STAGES,"Notes"];
+  const rows=kols.map(k=>[k.id,k.name,k.handle,k.brand,k.sku,k.tier,k.niche,k.followers,k.er,k.fee,k.airWindow,k.airDate,k.airStatus,k.paymentSplit,...STAGES.map(s=>k.stages[s]),`"${(k.notes||"").replace(/"/g,'""')}"`]);
+  const csv=[h,...rows].map(r=>r.join(",")).join("\n");
+  const a=document.createElement("a");
+  a.href="data:text/csv;charset=utf-8,\uFEFF"+encodeURIComponent(csv);
+  a.download=`kol-tracker-${new Date().toISOString().slice(0,10)}.csv`;a.click();
+}
+
+/* ══════════════════════════════════════
+   CLOSE ON OVERLAY CLICK
+══════════════════════════════════════ */
+["overlay","conf-overlay","setup-overlay"].forEach(id=>{
+  document.getElementById(id).addEventListener("click",e=>{if(e.target===e.currentTarget){document.getElementById(id).classList.remove("open");if(id==="overlay")editId=null;if(id==="conf-overlay")delId=null;}});
+});
+
+/* ══════════════════════════════════════
+   INIT
+══════════════════════════════════════ */
+render();
+if(scriptUrl){syncFromSheet();}
+else{setSyncStatus("err","Chưa cấu hình Sheets — click <span style='color:#2563eb;cursor:pointer' onclick='openSetup()'>⚙ Cấu hình</span> để bật sync");}
+</script>
+</body>
+</html>
